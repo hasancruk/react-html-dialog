@@ -54,34 +54,58 @@ function SummaryActions({ email, actions }: Data) {
   return actions;
 };
 
-
-export const ParticipantSummary = ({ data }: SummaryProps) => {
-  const [selected, setSelected] = useState(-1);
+function useDialog({ eventName = "hlx-request-dialog", handleClose }: { eventName?: string; handleClose: () => void; }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
-
-  const richData = data.map((d, i) => ({
-    ...d,
-    actions: <button onClick={() => {
-      setSelected(i);
-      dialogRef.current?.showModal();
-    }}>{d.actions}</button>
-  }));
+  const trigger = () => dialogRef.current?.showModal();
+  const emit = (target: EventTarget) => target.dispatchEvent(new Event(eventName, { bubbles: true }));
 
   useEffect(() => {
     const controller = new AbortController();
     const signal = controller.signal;
     
-    containerRef.current?.addEventListener("hlx-request-dialog", (e) => {
+    containerRef.current?.addEventListener(eventName, (e) => {
+      console.log("[DEBUG] Event name", eventName);
       console.log("[DEBUG] request dialog event:", e);
       console.log("[DEBUG] data:", (e.target as HTMLButtonElement).dataset.actionFor);
-      dialogRef.current?.showModal();
+
+      trigger();
+    }, { signal });
+
+    dialogRef.current?.addEventListener("close", (e) => {
+      console.log("[DEBUG] dialog close event:", e);
+
+      handleClose();
     }, { signal });
 
     return () => {
       controller.abort();
     };
-  }, []);
+  }, [eventName, handleClose]);
+
+  return {
+    containerRef,
+    dialogRef,
+    trigger,
+    emit,
+    handleClose,
+  };
+}
+
+export const ParticipantSummary = ({ data }: SummaryProps) => {
+  const [selected, setSelected] = useState(-1);
+  const { containerRef, dialogRef, trigger, emit } = useDialog({
+    handleClose: () => setSelected(-1),
+  });
+
+  const richData = data.map((d, i) => ({
+    ...d,
+    actions: <button onClick={() => {
+      setSelected(i);
+      trigger(); // Imperative
+      // emit(e.target); // Declarative
+    }}>{d.actions}</button>
+  }));
 
   return (
     <div className="participant-summary form-section-content" ref={containerRef}>
@@ -95,9 +119,7 @@ export const ParticipantSummary = ({ data }: SummaryProps) => {
       <button
         type="button"
         data-action-for="test@example.com"
-        onClick={(e) => {
-          e.target.dispatchEvent(new Event("hlx-request-dialog", { bubbles: true })) 
-        }}
+        onClick={(e) => emit(e.target)}
       >
         Test button
       </button>
