@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useState, type HTMLAttributes, type ReactNode, type RefObject } from "react";
 import "./App.css";
+import type { Dialog } from "./hlx-dialog";
 
 const TableHeadings = ({ headings }: { headings: string[] }) => (
   <thead>
@@ -54,66 +55,24 @@ function SummaryActions({ email, actions }: Data) {
   return actions;
 };
 
-function useDialog({ eventName = "hlx-request-dialog", handleClose }: { eventName?: string; handleClose: () => void; }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const dialogRef = useRef<HTMLDialogElement>(null);
-  const trigger = () => dialogRef.current?.showModal();
-  const emit = (target: EventTarget) => target.dispatchEvent(new Event(eventName, { bubbles: true }));
-
-  useEffect(() => {
-    const controller = new AbortController();
-    const signal = controller.signal;
-    
-    containerRef.current?.addEventListener(eventName, (e) => {
-      console.log("[DEBUG] Event name", eventName);
-      console.log("[DEBUG] request dialog event:", e);
-      console.log("[DEBUG] data:", (e.target as HTMLButtonElement).dataset.actionFor);
-
-      trigger();
-    }, { signal });
-
-    dialogRef.current?.addEventListener("close", (e) => {
-      console.log("[DEBUG] dialog close event:", e);
-
-      handleClose();
-    }, { signal });
-
-    return () => {
-      controller.abort();
-    };
-  }, [eventName, handleClose]);
-
-  return {
-    containerRef,
-    dialogRef,
-    trigger,
-    emit,
-    handleClose,
-  };
-}
-
 export const ParticipantSummary = ({ data }: SummaryProps) => {
   const [selected, setSelected] = useState(-1);
-  const { containerRef, dialogRef, trigger, emit } = useDialog({
-    handleClose: () => setSelected(-1),
-  });
 
   const richData = data.map((d, i) => ({
     ...d,
-    actions: <button onClick={() => {
+    actions: <button onClick={(e) => {
       setSelected(i);
-      trigger(); // Imperative
-      // emit(e.target); // Declarative
+      emit(e.target);
     }}>{d.actions}</button>
   }));
 
   return (
-    <div className="participant-summary form-section-content" ref={containerRef}>
+    <div className="participant-summary form-section-content">
       <table>
         <TableHeadings headings={["Ticket type", "Name", "Email", "Action"]} />
         <TableBody body={richData} />
       </table>
-      <Dialog ref={dialogRef}>
+      <Dialog handleClose={() => setSelected(-1)}>
         <p>Form for {data[selected]?.name}</p>
       </Dialog>
       <button
@@ -127,11 +86,26 @@ export const ParticipantSummary = ({ data }: SummaryProps) => {
   );
 };
 
-function Dialog({ ref, children }: { ref: RefObject<HTMLDialogElement | null>; children: ReactNode }) {
+function emit(target: EventTarget, eventName = "hlx-dialog-requested") {
+  console.log("DEBUG emitting from:", target);
+  target.dispatchEvent(new Event(eventName, { bubbles: true })); 
+}
+
+declare module "react/jsx-runtime" {
+  namespace JSX {
+    interface IntrinsicElements {
+      "hlx-dialog": HTMLAttributes<Dialog>;
+    }
+  }
+}
+
+function Dialog({ handleClose, children }: { handleClose: () => void; children: ReactNode }) {
   return (
-    <dialog ref={ref}>
-      { children } 
-    </dialog>
+    <hlx-dialog onhlx-dialog-closed={() => handleClose()}>
+      <dialog>
+        { children } 
+      </dialog>
+    </hlx-dialog>
   );
 }
 
@@ -139,14 +113,14 @@ function App() {
   const tickets = [
     {
       ticketType: "Adult",
-      name: "Hasan Ali",
-      email: "hasan@awesome.com",
+      name: "Jesse Abulu",
+      email: "jesse@awesome.com",
       actions: "edit",
     },
     {
       ticketType: "Adult",
-      name: "Ruby Chohan",
-      email: "ruby@awesome.com",
+      name: "Tom Metcalfe",
+      email: "tom@awesome.com",
       actions: "add",
     },
   ];
